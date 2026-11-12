@@ -1,9 +1,9 @@
 // MyRoof offline support.
 // App files: served from cache, refreshed in the background when there's signal.
 // Satellite tiles: saved the first time they load, so a job's satellite view works offline afterward.
-const APP = 'myroof-app-v1';
+const APP = 'myroof-app-v2';
 const TILES = 'myroof-tiles-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const SHELL = ['./', './index.html', './deck.js', './logo.png', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './vendor/jspdf.umd.min.js', './vendor/pdf.min.js', './vendor/pdf.worker.min.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -6,6 +6,7 @@
 <title>MyRoof – CPE Roof Measuring</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MyRoof">
@@ -92,6 +93,7 @@ h2{font-size:17px;margin:0 0 8px}
 <section class="screen on" id="sJobs">
   <header>
     <div class="title"><span class="brand">My</span>Roof<small>CoMo Premium Exteriors · roof measuring</small></div>
+    <button class="ghost" id="btnSettings">⚙ Settings</button>
     <button class="primary" id="btnNew">+ New job</button>
   </header>
   <main class="scroll">
@@ -117,6 +119,7 @@ h2{font-size:17px;margin:0 0 8px}
     <button class="ghost" id="btnFit">Fit</button>
     <button class="ghost" id="btnLabels">Labels</button>
     <button class="primary" id="btnReport">Report</button>
+    <button class="primary" id="btnDeck" style="background:#ffde40;border-color:#ffde40;color:#111">Deck</button>
   </header>
   <div id="edwrap">
     <svg id="cv" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -155,7 +158,31 @@ h2{font-size:17px;margin:0 0 8px}
   <main class="scroll" id="report"></main>
 </section>
 
+<!-- ============ SETTINGS ============ -->
+<section class="screen" id="sSettings">
+  <header>
+    <button class="ghost" id="btnSBack">‹ Jobs</button>
+    <div class="title">Settings<small>Company story, products, loan plans, CompanyCam</small></div>
+  </header>
+  <main class="scroll" id="settingsBody"></main>
+</section>
+
+<!-- ============ DECK PREP ============ -->
+<section class="screen" id="sDeck">
+  <header>
+    <button class="ghost" id="btnDBack">‹ Drawing</button>
+    <div class="title" id="dTitle">Deck</div>
+    <button class="primary" id="btnPresent" style="background:#ffde40;border-color:#ffde40;color:#111">▶ Present</button>
+  </header>
+  <main class="scroll" id="deckBody"></main>
+</section>
+
+<!-- ============ PRESENTER ============ -->
+<div id="present" hidden></div>
+
 <div id="modal"><div class="box" id="mbox"></div></div>
+<script src="vendor/jspdf.umd.min.js" defer></script>
+<script src="deck.js" defer></script>
 
 <script>
 "use strict";
@@ -261,14 +288,27 @@ const store = {
   async init(){
     try{
       this.db = await new Promise((res,rej)=>{
-        const r = indexedDB.open('cpe-myroof',1);
-        r.onupgradeneeded = ()=> r.result.createObjectStore('jobs',{keyPath:'id'});
+        const r = indexedDB.open('cpe-myroof',2);
+        r.onupgradeneeded = ()=>{ const d=r.result;
+          if(!d.objectStoreNames.contains('jobs')) d.createObjectStore('jobs',{keyPath:'id'});
+          if(!d.objectStoreNames.contains('settings')) d.createObjectStore('settings',{keyPath:'id'}); };
         r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error);
       });
       this.ok = true;
     }catch(e){ this.ok=false; }
   },
-  tx(mode){ return this.db.transaction('jobs',mode).objectStore('jobs'); },
+  tx(mode,name){ name=name||'jobs'; return this.db.transaction(name,mode).objectStore(name); },
+  memSettings:null,
+  async getSettings(){
+    if(!this.ok) return this.memSettings;
+    try{ return await new Promise((res,rej)=>{ const r=this.tx('readonly','settings').get('main'); r.onsuccess=()=>res(r.result||null); r.onerror=()=>rej(r.error); }); }
+    catch(e){ return this.memSettings; }
+  },
+  async putSettings(st){
+    this.memSettings=st; if(!this.ok) return;
+    try{ await new Promise((res,rej)=>{ const r=this.tx('readwrite','settings').put(JSON.parse(JSON.stringify(Object.assign({},st,{id:'main'})))); r.onsuccess=res; r.onerror=()=>rej(r.error); }); }
+    catch(e){ console.warn('settings save failed',e); }
+  },
   async all(){
     if(!this.ok) return [...this.mem.values()];
     try{ return await new Promise((res,rej)=>{ const r=this.tx('readonly').getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
@@ -983,7 +1023,8 @@ async function askScale(){
 })();
 
 // ---------- report ----------
-function diagramSVG(M){
+function diagramSVG(M, opt){
+  opt=opt||{}; const F = opt.client? 1.7 : 1;   // bigger labels on the client slide
   const pts=[...Object.values(M.P)]; if(!pts.length) return '';
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
@@ -998,11 +1039,11 @@ function diagramSVG(M){
   for(const e of M.edges){ const a=T(M.P[e.a]), b=T(M.P[e.b]); if(len(sub(a,b))<34) continue;
     let ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180;
     const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-    h+=`<text x="${m.x}" y="${m.y}" font-size="13" text-anchor="middle" dominant-baseline="middle" transform="rotate(${ang} ${m.x} ${m.y})" fill="#111" stroke="#fff" stroke-width="4" paint-order="stroke">${fmtFtIn(e.trueLen)}</text>`; }
+    h+=`<text x="${m.x}" y="${m.y}" font-size="${13*F}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${ang} ${m.x} ${m.y})" fill="#111" stroke="#fff" stroke-width="4" paint-order="stroke">${fmtFtIn(e.trueLen)}</text>`; }
   for(const pl of M.planes){ const c=T(pl.centroid);
-    h+=`<text x="${c.x}" y="${c.y-4}" font-size="15" font-weight="700" text-anchor="middle" fill="#14213d">${designator(pl.idx)} ${pl.pitch==null?'':pl.pitch+'/12'}</text>
-        <text x="${c.x}" y="${c.y+13}" font-size="12" text-anchor="middle" fill="#444">${fmt0(pl.area)} sf</text>`; }
-  if(job.scaleLine){ const a=T(job.scaleLine.a), b=T(job.scaleLine.b);
+    h+=`<text x="${c.x}" y="${c.y-4*F}" font-size="${15*F}" font-weight="700" text-anchor="middle" fill="#14213d">${designator(pl.idx)} ${pl.pitch==null?'':pl.pitch+'/12'}</text>
+        <text x="${c.x}" y="${c.y+13*F}" font-size="${12*F}" text-anchor="middle" fill="#444">${fmt0(pl.area)} sf</text>`; }
+  if(job.scaleLine && !opt.client){ const a=T(job.scaleLine.a), b=T(job.scaleLine.b);
     h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#e8762b" stroke-width="2" stroke-dasharray="5 4"/>
         <circle cx="${a.x}" cy="${a.y}" r="4" fill="#e8762b"/><circle cx="${b.x}" cy="${b.y}" r="4" fill="#e8762b"/>
         <text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-12}" font-size="12" text-anchor="middle" fill="#e8762b" stroke="#fff" stroke-width="4" paint-order="stroke">taped ${fmtFtIn(job.scaleLine.ft)} (scale)</text>`; }
