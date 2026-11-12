@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>MyRoof – CPE Roof Measuring</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MyRoof">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14213d">
+<style>
+:root{
+  --navy:#14213d; --navy2:#1f2f52; --orange:#e8762b; --bg:#f3f4f6; --card:#fff;
+  --ink:#1b1f24; --mute:#6b7280; --line:#d6d9de; --warn:#b42318; --ok:#1a7f37;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:15px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);
+  border-radius:10px;padding:9px 13px;min-height:42px}
+button.primary{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600}
+button.dark{background:var(--navy);border-color:var(--navy);color:#fff}
+button.ghost{background:transparent;border-color:transparent;color:#fff}
+button:disabled{opacity:.45;cursor:default}
+input,select{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:9px;width:100%;min-height:42px;background:#fff}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+.screen{display:none;height:100%;flex-direction:column}
+.screen.on{display:flex}
+header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:6px;padding:6px 8px;
+  padding-top:max(6px,env(safe-area-inset-top));min-height:54px;flex-wrap:wrap}
+header .title{font-weight:700;font-size:17px;flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .title small{display:block;font-weight:400;font-size:12px;opacity:.75}
+.brand{color:var(--orange)}
+main.scroll{flex:1;overflow:auto;padding:14px;max-width:980px;width:100%;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1;min-width:120px}
+.joblist .job{display:flex;align-items:center;gap:10px}
+.joblist .job .info{flex:1;min-width:0}
+.joblist .job b{display:block}
+.mute{color:var(--mute);font-size:13px}
+/* editor */
+#edwrap{flex:1;position:relative;overflow:hidden;background:#2a2f38;touch-action:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+#cv *{pointer-events:none}  /* labels, lines and symbols never catch a tap; the drawing area handles every tap */
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px}
+#empty[hidden]{display:none}
+#empty .card{max-width:520px;width:100%}
+#hud{position:absolute;left:8px;top:8px;background:rgba(20,33,61,.88);color:#fff;border-radius:10px;
+  padding:6px 10px;font-size:13px;pointer-events:none;max-width:calc(100% - 16px)}
+#hud .w{color:#ffb4a8}
+#toast{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;background:#111;color:#fff;padding:8px 14px;
+  border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
+#toast.on{opacity:.92}
+.tools{background:#fff;border-top:1px solid var(--line);padding:6px;padding-bottom:max(6px,env(safe-area-inset-bottom))}
+.modes{display:flex;gap:5px;overflow-x:auto}
+.modes button{flex:1;min-width:64px;padding:6px 4px;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.modes button .ic{font-size:18px;line-height:1}
+.modes button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.sub{display:flex;gap:6px;overflow-x:auto;padding:6px 0 4px;align-items:center;min-height:52px}
+.sub .hint{font-size:13px;color:var(--mute);white-space:nowrap;padding:0 4px}
+.chip{white-space:nowrap;min-height:38px;padding:6px 11px;border-radius:20px;font-size:14px;display:flex;align-items:center;gap:6px}
+.chip.on{outline:3px solid var(--orange);outline-offset:-1px;font-weight:600}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+#modal.on{display:flex}
+#modal .box{background:#fff;border-radius:16px;padding:16px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+#modal h3{margin:0 0 6px}
+#modal .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+/* report */
+table{border-collapse:collapse;width:100%}
+td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+h2{font-size:17px;margin:0 0 8px}
+.big{font-size:28px;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--bg);border-radius:10px;padding:10px}
+.kpi .l{font-size:12px;color:var(--mute)}
+.warnbox{background:#fff4f2;border:1px solid #f3c2bb;color:var(--warn);border-radius:10px;padding:10px;margin-bottom:12px}
+.okbox{background:#effaf2;border:1px solid #b9e3c5;color:var(--ok);border-radius:10px;padding:10px;margin-bottom:12px}
+#drawing svg{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:10px}
+.note{font-size:13px;color:var(--mute);margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- ============ JOBS ============ -->
+<section class="screen on" id="sJobs">
+  <header>
+    <div class="title"><span class="brand">My</span>Roof<small>CoMo Premium Exteriors · roof measuring</small></div>
+    <button class="primary" id="btnNew">+ New job</button>
+  </header>
+  <main class="scroll">
+    <div id="storeWarn"></div>
+    <div class="joblist" id="jobList"></div>
+    <div class="card">
+      <div class="row">
+        <button id="btnImport">Open a job file…</button>
+      </div>
+      <p class="note">Jobs are saved on this device. Use “Save job file” on a job's report to keep a backup or move it to another device.</p>
+      <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    </div>
+  </main>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section class="screen" id="sEdit">
+  <header>
+    <button class="ghost" id="btnBack">‹ Jobs</button>
+    <div class="title" id="edTitle">Job</div>
+    <button class="ghost" id="btnInfo">Job info</button>
+    <button class="ghost" id="btnUndo">↶ Undo</button>
+    <button class="ghost" id="btnFit">Fit</button>
+    <button class="ghost" id="btnLabels">Labels</button>
+    <button class="primary" id="btnReport">Report</button>
+  </header>
+  <div id="edwrap">
+    <svg id="cv" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="hud"></div>
+    <div id="empty" hidden>
+      <div class="card">
+        <h2>Load the roof image</h2>
+        <p class="mute">Use a straight-down drone shot, or a screenshot of the satellite view. You'll set the scale by taping one edge.</p>
+        <button class="primary" style="width:100%" id="btnPhoto">Load photo or screenshot</button>
+        <input type="file" id="filePhoto" accept="image/*" hidden>
+        <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+        <h2>Or: live satellite</h2>
+        <p class="mute">Scale is set automatically. Copy the coordinates from a long-press in Google Maps (e.g. 38.9517, -92.3341).</p>
+        <div class="row">
+          <div><label>Latitude, Longitude</label><input id="satLL" placeholder="38.9517, -92.3341" inputmode="decimal"></div>
+          <div style="max-width:130px"><label>Detail</label>
+            <select id="satZ"><option value="19">Wide</option><option value="20" selected>Normal</option><option value="21">Close</option></select></div>
+        </div>
+        <button style="width:100%;margin-top:10px" id="btnSat">Load satellite</button>
+      </div>
+    </div>
+    <div id="toast"></div>
+  </div>
+  <div class="tools">
+    <div class="sub" id="sub"></div>
+    <div class="modes" id="modes"></div>
+  </div>
+</section>
+
+<!-- ============ REPORT ============ -->
+<section class="screen" id="sReport">
+  <header>
+    <button class="ghost" id="btnRBack">‹ Drawing</button>
+    <div class="title" id="rTitle">Report</div>
+  </header>
+  <main class="scroll" id="report"></main>
+</section>
+
+<div id="modal"><div class="box" id="mbox"></div></div>
+
+<script>
+"use strict";
+/* =========================================================
+   MyRoof – CPE roof measuring (draft 1)
+   Job format: "cpe-myroof-1". Coordinates are image pixels;
+   ftPerPx converts to feet.
+   ========================================================= */
+
+// ---------- constants ----------
+const LINE_TYPES = [
+  {k:'eave',     n:'Eave',          c:'#2f9e44', x:'EAVE'},
+  {k:'rake',     n:'Rake',          c:'#1c7ed6', x:'RAKE'},
+  {k:'ridge',    n:'Ridge',         c:'#e03131', x:'RIDGE'},
+  {k:'hip',      n:'Hip',           c:'#f59f00', x:'HIP'},
+  {k:'valley',   n:'Valley',        c:'#ae3ec9', x:'VALLEY'},
+  {k:'step',     n:'Step flashing', c:'#12b886', x:'STEPFLASH'},
+  {k:'headwall', n:'Headwall / wall flashing', c:'#f06595', x:'FLASHING'},
+];
+const LT = Object.fromEntries(LINE_TYPES.map(t=>[t.k,t]));
+const UNTAGGED = '#ffffff';
+// pen:true = goes through the deck (counted as a penetration in the AccuLynx file)
+const PEN_TYPES = [
+  {k:'pipe',     n:'Pipe boot',             s:'P',  c:'#fab005', pen:true},
+  {k:'splitboot',n:'Split pipe boot',       s:'SB', c:'#ffd43b', pen:true},
+  {k:'galvpipe', n:'Galvanized vent pipe',  s:'GV', c:'#ced4da', pen:true},
+  {k:'broan6',   n:'Broan vent 6"',         s:'B6', c:'#a5d8ff', pen:true},
+  {k:'broan8',   n:'Broan vent 8"',         s:'B8', c:'#74c0fc', pen:true},
+  {k:'boxvent',  n:'Box vent w/ bat cage',  s:'BV', c:'#b2f2bb', pen:true},
+  {k:'turbine',  n:'Wind turbine vent',     s:'WT', c:'#8ce99a', pen:true},
+  {k:'powervent',n:'Power exhaust vent',    s:'PV', c:'#63e6be', pen:true},
+  {k:'vent750',  n:'750 vent',              s:'750',c:'#99e9f2', pen:true},
+  {k:'vent550',  n:'550 vent',              s:'550',c:'#66d9e8', pen:true},
+  {k:'vent',     n:'Vent',                  s:'V',  c:'#99e9f2', pen:true, hidden:true}, // older jobs only
+  {k:'skylight', n:'Skylight',              s:'S',  c:'#ffffff', pen:true, sq:true},
+  {k:'chimney',  n:'Chimney',               s:'C',  c:'#ff8787', pen:true, sq:true},
+  {k:'dish',     n:'Satellite dish',        s:'SD', c:'#e599f7', pen:false},
+  {k:'kwikplug', n:'Kwik plug',             s:'KP', c:'#ffc078', pen:false},
+];
+const PT = Object.fromEntries(PEN_TYPES.map(t=>[t.k,t]));
+const PITCHES = [2,3,4,5,6,7,8,9,10,11,12,14];
+const MODES = [
+  {k:'draw',  n:'Draw',  ic:'✏️'},
+  {k:'lines', n:'Lines', ic:'📏'},
+  {k:'pitch', n:'Pitch', ic:'📐'},
+  {k:'items', n:'Items', ic:'⭕'},
+  {k:'scale', n:'Scale', ic:'📌'},
+  {k:'move',  n:'Move',  ic:'✋'},
+  {k:'erase', n:'Erase', ic:'🧽'},
+];
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-3);
+const ekey = (a,b) => a<b ? a+'|'+b : b+'|'+a;
+function fmtFtIn(ft){
+  if(!isFinite(ft)) return '—';
+  let inch = Math.round(ft*12); const f = Math.floor(inch/12); const i = inch - f*12;
+  return i ? `${f}' ${i}"` : `${f}'`;
+}
+const fmt0 = n => Math.round(n).toLocaleString('en-US');
+const fmt1 = n => (Math.round(n*10)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const fmt2 = n => (Math.round(n*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function parseLen(s){
+  s = String(s||'').trim().replace(/[’′]/g,"'").replace(/[”″]/g,'"');
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?\s*(?:(\d+(?:\.\d+)?)\s*(?:"|in|inch|inches)?)?$/i);
+  if(!m) return NaN;
+  return parseFloat(m[1]) + (m[2] ? parseFloat(m[2])/12 : 0);
+}
+// sizes for skylights/chimneys: plain number = inches; with ' = feet-inches. Returns inches.
+function parseIn(s){
+  s=String(s||'').trim().replace(/[’′]/g,"'").replace(/[”″]/g,'"');
+  if(!s) return NaN;
+  if(s.includes("'")||/ft|feet/i.test(s)) return parseLen(s)*12;
+  const m=s.match(/^(\d+(?:\.\d+)?)\s*(?:"|in|inch|inches)?$/i); return m? parseFloat(m[1]) : NaN;
+}
+function fmtIn(i){ if(!isFinite(i)) return '—'; i=Math.round(i*4)/4; return i>=24 && i%12===0 ? (i/12)+"'" : (i>=36 ? fmtFtIn(i/12) : i+'"'); }
+const isSized = t => t==='skylight'||t==='chimney';
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2600); }
+
+// ---------- modal ----------
+function modal(html, buttons){
+  return new Promise(res=>{
+    const box=$('mbox');
+    box.innerHTML = html + '<div class="acts">' + buttons.map((b,i)=>`<button data-i="${i}" class="${b.cls||''}">${esc(b.t)}</button>`).join('') + '</div>';
+    $('modal').classList.add('on');
+    const first = box.querySelector('input,select'); if(first) setTimeout(()=>first.focus(),50);
+    box.querySelectorAll('.acts button').forEach(btn=>btn.onclick=()=>{
+      const b=buttons[+btn.dataset.i];
+      const vals={}; box.querySelectorAll('[data-f]').forEach(el=>vals[el.dataset.f]=el.value);
+      if(b.check && !b.check(vals)) return;
+      $('modal').classList.remove('on'); res({i:+btn.dataset.i, v:b.v, vals});
+    });
+    box.onkeydown = e=>{ if(e.key==='Enter'){ const p=box.querySelector('.acts button.primary'); if(p){e.preventDefault();p.click();} } };
+  });
+}
+
+// ---------- storage (IndexedDB, falls back to memory) ----------
+const store = {
+  db:null, mem:new Map(), ok:false,
+  async init(){
+    try{
+      this.db = await new Promise((res,rej)=>{
+        const r = indexedDB.open('cpe-myroof',1);
+        r.onupgradeneeded = ()=> r.result.createObjectStore('jobs',{keyPath:'id'});
+        r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error);
+      });
+      this.ok = true;
+    }catch(e){ this.ok=false; }
+  },
+  tx(mode){ return this.db.transaction('jobs',mode).objectStore('jobs'); },
+  async all(){
+    if(!this.ok) return [...this.mem.values()];
+    try{ return await new Promise((res,rej)=>{ const r=this.tx('readonly').getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+    catch(e){ return [...this.mem.values()]; }
+  },
+  async put(job){
+    this.mem.set(job.id, job);
+    if(!this.ok) return;
+    try{ await new Promise((res,rej)=>{ const r=this.tx('readwrite').put(JSON.parse(JSON.stringify(job))); r.onsuccess=res; r.onerror=()=>rej(r.error); }); }
+    catch(e){ console.warn('save failed',e); }
+  },
+  async del(id){
+    this.mem.delete(id);
+    if(!this.ok) return;
+    try{ await new Promise((res,rej)=>{ const r=this.tx('readwrite').delete(id); r.onsuccess=res; r.onerror=()=>rej(r.error); }); }catch(e){}
+  }
+};
+
+// ---------- file save (preview: Claude downloads capability; own site: normal download) ----------
+let downloadsNS; let downloadsTried=false;
+async function getDownloads(){
+  if(downloadsTried) return downloadsNS;
+  downloadsTried=true;
+  try{ if(window.claude && window.claude.use) downloadsNS = await window.claude.use('downloads'); }catch(e){ downloadsNS=null; }
+  return downloadsNS;
+}
+const IN_PREVIEW = !!(window.claude && window.claude.use);
+async function saveFile(filename, text, mime){
+  if(IN_PREVIEW){
+    const d = await getDownloads();
+    if(!d){ toast('Saving files is not available here.'); return false; }
+    try{ await d.save({filename, data:text}); toast('Saved: '+filename); return true; }
+    catch(e){ if(e && e.code==='declined') toast('Save cancelled'); else toast('Could not save ('+(e&&e.code||'error')+')'); return false; }
+  }
+  const blob = new Blob([text],{type:mime||'text/plain'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  return true;
+}
+
+// ---------- job model ----------
+function newJob(f){
+  return {
+    format:'cpe-myroof-1', id:uid(), created:Date.now(), updated:Date.now(),
+    name:f.name||'New job', address:f.address||'', city:f.city||'', state:f.state||'MO', zip:f.zip||'',
+    lat:null, lng:null, stories:'1', waste:10,
+    source:null, ftPerPx:null, scaleLine:null,
+    pts:[], planes:[], edgeTypes:{}, ridgeVent:{}, pens:[]
+  };
+}
+
+// ---------- geometry ----------
+const sub = (a,b)=>({x:a.x-b.x,y:a.y-b.y});
+const dot = (a,b)=>a.x*b.x+a.y*b.y;
+const len = v=>Math.hypot(v.x,v.y);
+const norm = v=>{const l=len(v)||1;return {x:v.x/l,y:v.y/l};};
+function polyArea(P){ let s=0; for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length]; s+=a.x*b.y-b.x*a.y;} return Math.abs(s)/2; }
+function polyCentroid(P){
+  let A=0,cx=0,cy=0;
+  for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length]; const c=a.x*b.y-b.x*a.y; A+=c; cx+=(a.x+b.x)*c; cy+=(a.y+b.y)*c;}
+  if(Math.abs(A)<1e-9){ return {x:P.reduce((s,p)=>s+p.x,0)/P.length, y:P.reduce((s,p)=>s+p.y,0)/P.length}; }
+  return {x:cx/(3*A), y:cy/(3*A)};
+}
+function inPoly(p,P){ let c=false; for(let i=0,j=P.length-1;i<P.length;j=i++){ const a=P[i],b=P[j];
+  if(((a.y>p.y)!==(b.y>p.y)) && (p.x < (b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)) c=!c; } return c; }
+function segDist(p,a,b){ const ab=sub(b,a), t=Math.max(0,Math.min(1,dot(sub(p,a),ab)/(dot(ab,ab)||1)));
+  const q={x:a.x+ab.x*t,y:a.y+ab.y*t}; return {d:len(sub(p,q)),q,t}; }
+const pitchFactor = p => Math.sqrt(1+(p/12)*(p/12));
+
+// Full measurement of a job. All lengths in feet, areas in sq ft.
+function measure(job){
+  const k = job.ftPerPx || 0;
+  const P = Object.fromEntries(job.pts.map(p=>[p.id,p]));
+  const edges = new Map();
+  const planes = job.planes.map((pl,idx)=>{
+    const poly = pl.pts.map(id=>P[id]).filter(Boolean);
+    const out = {id:pl.id, idx, pitch:pl.pitch, poly, ptIds:pl.pts, edgeKeys:[]};
+    for(let i=0;i<pl.pts.length;i++){
+      const a=pl.pts[i], b=pl.pts[(i+1)%pl.pts.length]; const key=ekey(a,b);
+      out.edgeKeys.push(key);
+      if(!edges.has(key)) edges.set(key,{key, a, b, type:job.edgeTypes[key]||null, planes:[]});
+      edges.get(key).planes.push(out);
+    }
+    out.planAreaPx = polyArea(poly);
+    out.centroid = polyCentroid(poly);
+    return out;
+  });
+  // slope direction per plane (unit vector pointing UPSLOPE in image coords)
+  for(const pl of planes){
+    let best=null, bestType=null;
+    for(const t of ['eave','ridge']){
+      for(const key of pl.edgeKeys){ const e=edges.get(key); if(e.type!==t) continue;
+        const L=len(sub(P[e.b],P[e.a])); if(!best||L>best.L){best={e,L};} }
+      if(best){bestType=t;break;}
+    }
+    pl.refType = bestType; pl.u=null;
+    if(best){
+      const a=P[best.e.a], b=P[best.e.b];
+      const ev=norm(sub(b,a)); let n={x:-ev.y,y:ev.x};
+      if(dot(sub(pl.centroid,a),n)<0) n={x:-n.x,y:-n.y};         // n points into the plane
+      pl.u = bestType==='eave' ? n : {x:-n.x,y:-n.y};             // eave: upslope is inward; ridge: upslope is outward
+      pl.refPt = a;
+    }
+    const p = pl.pitch ?? 0;
+    pl.planArea = pl.planAreaPx*k*k;
+    pl.area = pl.planArea*pitchFactor(p);
+  }
+  // true length of each edge
+  for(const e of edges.values()){
+    const a=P[e.a], b=P[e.b]; const v=sub(b,a); const Lpx=len(v); e.planLen=Lpx*k;
+    const ev = norm(v); let sum=0,n=0;
+    for(const pl of e.planes){ if(!pl.u || pl.pitch==null) continue;
+      const rise = Math.abs(dot(ev,pl.u))*e.planLen*pl.pitch/12; sum += Math.hypot(e.planLen,rise); n++; }
+    e.trueLen = n ? sum/n : e.planLen;
+    e.sloped = n>0;
+  }
+  // totals
+  const byType = Object.fromEntries(LINE_TYPES.map(t=>[t.k,{len:0,count:0}]));
+  let untagged=0;
+  for(const e of edges.values()){ if(e.type && byType[e.type]){ byType[e.type].len+=e.trueLen; byType[e.type].count++; } else untagged++; }
+  const RV = job.ridgeVent||{}; const ridgeVent={len:0,count:0};
+  for(const e of edges.values()){ e.vent = !!RV[e.key] && (e.type==='ridge'||e.type==='hip'); if(e.vent){ ridgeVent.len+=e.trueLen; ridgeVent.count++; } }
+  const byPitch = {};
+  let area=0, planArea=0;
+  for(const pl of planes){ area+=pl.area; planArea+=pl.planArea; const key=pl.pitch==null?'none':pl.pitch;
+    byPitch[key]=(byPitch[key]||0)+pl.area; }
+  const pens = Object.fromEntries(PEN_TYPES.map(t=>[t.k,0])); for(const p of job.pens) pens[p.type]=(pens[p.type]||0)+1;
+  const sized = job.pens.filter(p=>isSized(p.type));
+  let penArea=0, penPerim=0; for(const p of sized){ if(p.w&&p.l){ penArea+=p.w*p.l/144; penPerim+=2*(p.w+p.l)/12; } }
+  const unsized = sized.filter(p=>!(p.w&&p.l)).length;
+  const noPitch = planes.filter(p=>p.pitch==null).length;
+  const noDir = planes.filter(p=>!p.u && p.pitch).length;
+  let predominant=null, pmax=-1; for(const [p,a] of Object.entries(byPitch)){ if(p!=='none'&&a>pmax){pmax=a;predominant=+p;} }
+  const warnings=[];
+  if(!k) warnings.push('Scale is not set — use the Scale tool and tape one edge.');
+  if(!planes.length) warnings.push('No roof planes drawn yet.');
+  if(noPitch) warnings.push(`${noPitch} plane${noPitch>1?'s have':' has'} no pitch set.`);
+  if(untagged) warnings.push(`${untagged} line${untagged>1?'s are':' is'} not tagged (eave, rake, ridge…).`);
+  if(unsized) warnings.push(`${unsized} skylight/chimney${unsized>1?'s have':' has'} no size — tap it in Items to enter one.`);
+  if(noDir) warnings.push(`${noDir} plane${noDir>1?'s need':' needs'} an eave or ridge tagged so the slope direction is known (hip/valley/rake lengths depend on it).`);
+  return {k, P, planes, edges:[...edges.values()], byType, ridgeVent, penArea, penPerim, byPitch, pens, area, planArea, untagged, noPitch, predominant, warnings};
+}
+
+// Corner elevations (feet) for the 3D export. Walks across planes that share corners.
+function elevations(job, M){
+  const k=M.k; const z=new Map(); const done=new Set();
+  const ready = M.planes.filter(p=>p.u && p.pitch!=null);
+  const zOf = (pl,pt,base)=> base + dot(sub(pt,pl.refPt),pl.u)*k*pl.pitch/12;
+  while(done.size<ready.length){
+    let pl = ready.find(p=>!done.has(p.id) && p.ptIds.some(id=>z.has(id)));
+    let base;
+    if(pl){ const id=pl.ptIds.find(i=>z.has(i)); base = z.get(id) - (zOf(pl,M.P[id],0)); }
+    else { pl = ready.find(p=>!done.has(p.id)); base = 0; }
+    for(const id of pl.ptIds){ const v=zOf(pl,M.P[id],base); z.set(id, z.has(id)? (z.get(id)+v)/2 : v); }
+    done.add(pl.id);
+  }
+  let min=Infinity; for(const v of z.values()) min=Math.min(min,v);
+  if(!isFinite(min)) min=0;
+  const eaveHeight = job.stories==='2'?19:(job.stories==='>2'?28:10);
+  const out=new Map(); for(const p of job.pts) out.set(p.id, (z.has(p.id)?z.get(p.id)-min:0)+eaveHeight);
+  return out;
+}
+
+// ---------- EagleView-format XML export ----------
+function compassOf(u){ // u = upslope; downslope azimuth, image top = north
+  const d={x:-u.x,y:-u.y}; let az=Math.atan2(d.x,-d.y)*180/Math.PI; if(az<0) az+=360;
+  const dir = az>=315||az<45?'North':az<135?'East':az<225?'South':'West';
+  return {az:Math.round(az*10)/10, dir};
+}
+function designator(i){ let s=''; i++; while(i>0){ const r=(i-1)%26; s=String.fromCharCode(65+r)+s; i=Math.floor((i-1)/26);} return s; }
+function buildXML(job){
+  const M=measure(job), k=M.k; const Z=elevations(job,M);
+  const q = v=>`"${esc(v)}"`;
+  const ptIndex=new Map(); job.pts.forEach((p,i)=>ptIndex.set(p.id,'C'+(i+1)));
+  const lineIndex=new Map(); M.edges.forEach((e,i)=>lineIndex.set(e.key,'L'+(i+1)));
+  const L=[];
+  L.push('<?xml version="1.0" encoding="utf-8"?>');
+  L.push('<!-- Generated by CPE MyRoof (CoMo Premium Exteriors) from a contractor-drawn measurement. Not an EagleView report; uses the EagleView export layout for import. -->');
+  L.push('<EAGLEVIEW_EXPORT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">');
+  const rid = String(Date.now()).slice(-8);
+  L.push(`  <REPORT claimId="" reportId=${q(rid)} />`);
+  L.push('  <VERSION coplanarity="" dormers="" precision="0" precisionUnits="" sourceVersion="1028" targetVersion="0" triangulation="" />');
+  L.push(`  <LOCATION address=${q(job.address)} city=${q(job.city)} lat=${q(job.lat??'')} long=${q(job.lng??'')} postal=${q(job.zip)} state=${q(job.state)} />`);
+  L.push('  <STRUCTURES northorientation="0">');
+  L.push('    <ROOF id="ROOF1">');
+  L.push('      <FACES>');
+  M.planes.forEach((pl,i)=>{
+    const c = pl.u? compassOf(pl.u) : {az:'',dir:''};
+    const path = pl.edgeKeys.map(key=>lineIndex.get(key)).join(',');
+    L.push(`        <FACE designator=${q(designator(i))} id="F${i+1}" material="1" type="ROOF" obstruction="False" children="">`);
+    L.push(`          <POLYGON id="P${i+1}" orientation=${q(c.az)} direction=${q(c.dir)} path=${q(path)} pitch=${q(pl.pitch??0)} size=${q(Math.round(pl.area))} unroundedsize=${q(pl.area.toFixed(9))} />`);
+    L.push('        </FACE>');
+  });
+  L.push('      </FACES>');
+  L.push('      <LINES>');
+  M.edges.forEach(e=>{
+    const t = e.type? LT[e.type].x : 'OTHER';
+    L.push(`        <LINE id="${lineIndex.get(e.key)}" path="${ptIndex.get(e.a)},${ptIndex.get(e.b)}" type="${t}" />`);
+  });
+  L.push('      </LINES>');
+  L.push('      <POINTS>');
+  job.pts.forEach(p=>{
+    const x=(p.x*k).toFixed(9), y=(-p.y*k).toFixed(9), z=(Z.get(p.id)||0).toFixed(9);
+    L.push(`        <POINT id="${ptIndex.get(p.id)}" data="${x},${y},${z}" />`);
+  });
+  L.push('      </POINTS>');
+  L.push('    </ROOF>');
+  L.push('  </STRUCTURES>');
+  L.push('  <MATERIALS>');
+  L.push('    <MATERIAL id="1" type="" label="None" />');
+  L.push('  </MATERIALS>');
+  L.push('  <SUBTYPES />');
+  L.push('  <OVERALL_SUMMARY>');
+  const T=M.byType, A=(n,v)=>L.push(`    <ATTRIBUTE name=${q(n)} value=${q(v)} />`);
+  const area=Math.round(M.area);
+  const penCount = job.pens.filter(p=>(PT[p.type]||{pen:true}).pen).length;
+  const waste = +job.waste||0;
+  const complexity = M.planes.length<=6?'Simple':(M.planes.length<=15?'Normal':'Complex');
+  A('TotalRoofArea', area);
+  A('TotalRoofFacets', M.planes.length);
+  A('PredominantPitch', M.predominant!=null? M.predominant+'/12' : '');
+  A('NumberOfStories', job.stories);
+  A('TotalHipsandRidgesLength', Math.round(T.hip.len+T.ridge.len));
+  A('TotalRidgesLength', Math.round(T.ridge.len));
+  A('TotalHipsLength', Math.round(T.hip.len));
+  A('TotalValleysLength', Math.round(T.valley.len));
+  A('TotalRakesLength', Math.round(T.rake.len));
+  A('TotalEavesLength', Math.round(T.eave.len));
+  A('TotalPenetrationsCount', penCount);
+  A('TotalPenetrationsPerimeter', Math.round(M.penPerim));
+  A('TotalPenetrationsArea', Math.round(M.penArea));
+  A('TotalFlashingLength', Math.round(T.headwall.len));
+  A('TotalStepFlashingLength', Math.round(T.step.len));
+  A('TotalParapetsLength', 0);
+  A('TotalRoofAreaLessPenetrations', Math.round(M.area-M.penArea));
+  Object.entries(M.byPitch).filter(([p])=>p!=='none').sort((a,b)=>+a[0]-+b[0]).forEach(([p,a])=>A(`RoofAreaPerPitch:${p}/12`, (Math.round(a*10)/10).toFixed(1)));
+  A('TotalRidgesCount', T.ridge.count);
+  A('TotalHipsCount', T.hip.count);
+  A('TotalValleysCount', T.valley.count);
+  A('TotalRakesCount', T.rake.count);
+  A('TotalEavesCount', T.eave.count);
+  A('StructureComplexity', complexity);
+  A('SuggestedWastePercentage', waste);
+  A('SuggestedWasteArea', Math.round(M.area*(1+waste/100)));
+  A('SuggestedWasteSquares', (Math.round(M.area*(1+waste/100))/100).toFixed(2));
+  L.push('  </OVERALL_SUMMARY>');
+  L.push('</EAGLEVIEW_EXPORT>');
+  return L.join('\r\n');
+}
+
+// ---------- app state ----------
+let jobs=[]; let job=null; let mode='draw';
+let curLine='eave', curPitch=6, curPen='pipe';
+let draft=[];             // point ids of the plane being drawn
+let scalePick=[];         // world points for the scale tool
+let view={s:1,tx:0,ty:0};
+let showLabels=true;
+let hist=[];
+let satFail=0, satTotal=0;
+let dragPt=null;          // corner being dragged (for the crosshair)
+// Phones: corners only move in the Move tool, so swiping around doesn't nudge them. iPad/desktop: drag corners in any tool.
+const isPhone = () => Math.min(window.innerWidth, window.innerHeight) < 600;
+const canDragCorners = () => mode==='move' || (mode!=='scale' && !isPhone());
+
+function snapshot(){ return JSON.stringify({pts:job.pts,planes:job.planes,edgeTypes:job.edgeTypes,ridgeVent:job.ridgeVent||{},pens:job.pens,ftPerPx:job.ftPerPx,scaleLine:job.scaleLine}); }
+function pushHist(){ hist.push(snapshot()); if(hist.length>60) hist.shift(); }
+function undo(){
+  if(mode==='draw' && draft.length){ draft.pop(); cleanupPts(); render(); return; }
+  if(mode==='scale' && scalePick.length){ scalePick=[]; render(); return; }
+  const s=hist.pop(); if(!s){ toast('Nothing to undo'); return; }
+  Object.assign(job, JSON.parse(s)); save(); render();
+}
+let saveT;
+function save(){ if(!job) return; job.updated=Date.now(); clearTimeout(saveT); saveT=setTimeout(()=>store.put(job),300); }
+
+// ---------- screens ----------
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id===id)); }
+
+async function renderJobs(){
+  jobs = (await store.all()).sort((a,b)=>b.updated-a.updated);
+  $('storeWarn').innerHTML = store.ok? '' : '<div class="warnbox">This browser is not letting MyRoof save on the device. Jobs will be lost when the page closes — use “Save job file” to keep them.</div>';
+  const el=$('jobList');
+  if(!jobs.length){ el.innerHTML='<div class="card"><h2>No jobs yet</h2><p class="mute">Tap “+ New job” to measure your first roof.</p></div>'; return; }
+  el.innerHTML = jobs.map(j=>{
+    const M=measure(j);
+    const sq = M.k&&M.planes.length? fmt2(M.area/100)+' sq' : 'not measured';
+    return `<div class="card job"><div class="info"><b>${esc(j.name)}</b><span class="mute">${esc([j.address,j.city].filter(Boolean).join(', '))||'No address'} · ${sq} · ${new Date(j.updated).toLocaleDateString()}</span></div>
+      <button class="dark" data-open="${j.id}">Open</button><button data-del="${j.id}" title="Delete">🗑</button></div>`;
+  }).join('');
+  el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openJob(jobs.find(j=>j.id===b.dataset.open)));
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    const j=jobs.find(x=>x.id===b.dataset.del);
+    const r=await modal(`<h3>Delete job?</h3><p>${esc(j.name)} will be removed from this device.</p>`,[{t:'Cancel'},{t:'Delete',cls:'primary',v:1}]);
+    if(r.v){ await store.del(j.id); renderJobs(); }
+  });
+}
+
+function jobForm(j){
+  return `<label>Homeowner / job name</label><input data-f="name" value="${esc(j.name||'')}">
+  <label>Street address</label><input data-f="address" value="${esc(j.address||'')}">
+  <div class="row"><div><label>City</label><input data-f="city" value="${esc(j.city||'')}"></div>
+  <div style="max-width:80px"><label>State</label><input data-f="state" value="${esc(j.state||'MO')}"></div>
+  <div style="max-width:110px"><label>ZIP</label><input data-f="zip" value="${esc(j.zip||'')}" inputmode="numeric"></div></div>`;
+}
+$('btnNew').onclick = async()=>{
+  const r = await modal('<h3>New job</h3>'+jobForm({}), [{t:'Cancel'},{t:'Create',cls:'primary',v:1,check:v=>v.name.trim()?true:(toast('Enter a name'),false)}]);
+  if(!r.v) return;
+  const j=newJob(r.vals); await store.put(j); openJob(j);
+};
+$('btnImport').onclick=()=>$('fileImport').click();
+$('fileImport').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{ const j=JSON.parse(await f.text()); if(j.format!=='cpe-myroof-1') throw 0;
+    if(jobs.some(x=>x.id===j.id)) j.id=uid(); j.updated=Date.now(); await store.put(j); renderJobs(); toast('Job opened: '+j.name); }
+  catch(_){ toast('That is not a MyRoof job file'); }
+};
+
+function openJob(j){
+  job=j; hist=[]; draft=[]; scalePick=[];
+  mode = job.planes.length? 'lines':'draw';
+  if(!job.ftPerPx && job.source) mode='scale';
+  $('edTitle').innerHTML = esc(job.name)+`<small>${esc(job.address||'')}</small>`;
+  show('sEdit'); setupModes(); fitView(); render();
+}
+$('btnBack').onclick=()=>{ store.put(job); show('sJobs'); renderJobs(); };
+$('btnUndo').onclick=undo;
+$('btnFit').onclick=()=>{ fitView(); render(); };
+$('btnLabels').onclick=()=>{ showLabels=!showLabels; render(); };
+$('btnReport').onclick=()=>{ store.put(job); renderReport(); show('sReport'); };
+$('btnRBack').onclick=()=>{ show('sEdit'); render(); };
+$('btnInfo').onclick=async()=>{
+  const r=await modal('<h3>Job info</h3>'+jobForm(job)+`
+    <div class="row"><div><label>Stories</label><select data-f="stories">${['1','2','>2'].map(s=>`<option ${job.stories===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div><label>Waste % for the export</label><input data-f="waste" inputmode="decimal" value="${esc(job.waste)}"></div></div>`,
+    [{t:'Cancel'},{t:'Save',cls:'primary',v:1}]);
+  if(!r.v) return;
+  Object.assign(job,{name:r.vals.name,address:r.vals.address,city:r.vals.city,state:r.vals.state,zip:r.vals.zip,stories:r.vals.stories,waste:parseFloat(r.vals.waste)||0});
+  $('edTitle').innerHTML = esc(job.name)+`<small>${esc(job.address||'')}</small>`; save();
+};
+
+// ---------- image sources ----------
+$('btnPhoto').onclick=()=>$('filePhoto').click();
+$('filePhoto').onchange=e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const img=new Image(); const url=URL.createObjectURL(f);
+  img.onload=()=>{
+    const max=3200; let w=img.naturalWidth,h=img.naturalHeight; const r=Math.min(1,max/Math.max(w,h)); w=Math.round(w*r); h=Math.round(h*r);
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+    job.source={kind:'photo', dataUrl:c.toDataURL('image/jpeg',0.86), w, h};
+    job.ftPerPx=null; job.scaleLine=null; URL.revokeObjectURL(url);
+    save(); setMode('scale'); fitView(); render();
+    toast('Now tap the two ends of an edge you taped');
+  };
+  img.onerror=()=>toast('Could not read that image');
+  img.src=url;
+};
+$('btnSat').onclick=()=>{
+  const m=$('satLL').value.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
+  if(!m){ toast('Enter latitude, longitude'); return; }
+  const lat=+m[1], lng=+m[2], z=+$('satZ').value;
+  if(Math.abs(lat)>85||Math.abs(lng)>180){ toast('Those coordinates look wrong'); return; }
+  const n=2**z; const xt=(lng+180)/360*n; const lr=lat*Math.PI/180;
+  const yt=(1-Math.log(Math.tan(lr)+1/Math.cos(lr))/Math.PI)/2*n;
+  const R=3; const x0=Math.floor(xt)-R, y0=Math.floor(yt)-R; const N=2*R+1;
+  const tiles=[]; for(let i=0;i<N;i++) for(let j=0;j<N;j++) tiles.push({x:x0+i,y:y0+j,ix:i*256,iy:j*256,
+    url:`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y0+j}/${x0+i}`});
+  const mpp = 156543.03392*Math.cos(lr)/n;
+  job.source={kind:'satellite', lat, lng, z, w:N*256, h:N*256, tiles};
+  job.lat=lat; job.lng=lng; job.ftPerPx = mpp*3.280839895; job.scaleLine=null;
+  // check whether this browser can load the tiles
+  satFail=0; satTotal=tiles.length;
+  tiles.forEach(t=>{ const im=new Image(); im.onerror=()=>{ satFail++; if(satFail===satTotal) satBlocked(); }; im.src=t.url; });
+  save(); setMode('draw'); fitView(); render();
+};
+function satBlocked(){
+  modal(`<h3>Satellite can't load here</h3><p>This preview blocks outside images, so live satellite won't show until MyRoof runs from its own site.</p>
+  <p>For now: take a screenshot of the satellite view (Google Maps or Earth), load it with <b>Load photo or screenshot</b>, then tape one edge with the Scale tool.</p>`,[{t:'OK',cls:'primary'}])
+  .then(()=>{ job.source=null; job.ftPerPx=null; save(); render(); });
+}
+
+// ---------- modes & toolbar ----------
+function setupModes(){
+  $('modes').innerHTML = MODES.map(m=>`<button data-m="${m.k}"><span class="ic">${m.ic}</span>${m.n}</button>`).join('');
+  $('modes').querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+}
+function setMode(m){
+  if(mode==='draw' && m!=='draw' && draft.length){ draft=[]; cleanupPts(); }
+  if(m!=='scale') scalePick=[];
+  mode=m; render();
+}
+function renderSub(){
+  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m===mode));
+  const s=$('sub'); let h='';
+  if(mode==='draw'){
+    h = draft.length
+      ? `<span class="hint">${draft.length} corner${draft.length>1?'s':''} · tap the first corner to close</span>
+         <button class="chip primary" id="sClose" ${draft.length<3?'disabled':''}>Close plane</button><button class="chip" id="sUndoPt">Undo corner</button><button class="chip" id="sCancel">Cancel</button>`
+      : `<span class="hint">Tap each corner of one roof plane. Corners snap to existing corners and edges.${isPhone()?'':' Drag any corner to adjust it.'}</span>`;
+  } else if(mode==='lines'){
+    h = LINE_TYPES.map(t=>`<button class="chip ${curLine===t.k?'on':''}" data-lt="${t.k}"><span class="sw" style="background:${t.c}"></span>${t.n}</button>`).join('')
+      + `<button class="chip ${curLine==='ridgevent'?'on':''}" data-lt="ridgevent"><span class="sw" style="background:repeating-linear-gradient(90deg,#e03131 0 4px,#fff 4px 7px)"></span>Ridge vent</button>`
+      + `<button class="chip ${curLine==='none'?'on':''}" data-lt="none"><span class="sw" style="background:#fff"></span>Clear</button>`;
+  } else if(mode==='pitch'){
+    h = `<span class="hint">Pick, then tap planes</span>` + PITCHES.map(p=>`<button class="chip ${curPitch===p?'on':''}" data-p="${p}">${p}/12</button>`).join('')
+      + `<button class="chip ${!PITCHES.includes(curPitch)?'on':''}" id="sOtherP">${!PITCHES.includes(curPitch)?curPitch+'/12':'Other…'}</button>`;
+  } else if(mode==='items'){
+    h = PEN_TYPES.filter(t=>!t.hidden).map(t=>`<button class="chip ${curPen===t.k?'on':''}" data-pen="${t.k}"><span class="sw" style="background:${t.c}"></span>${t.n}</button>`).join('')
+      + `<span class="hint">Tap the roof to place</span>`;
+  } else if(mode==='scale'){
+    const cur = job.ftPerPx ? (job.source&&job.source.kind==='satellite'&&!job.scaleLine ? 'Scale set from satellite.' : 'Scale set.') : 'Scale not set.';
+    h = `<span class="hint">${cur} Tap both ends of an edge you taped${scalePick.length?' — tap the other end':''}.</span>`;
+  } else if(mode==='move'){
+    h = `<span class="hint">Drag a corner to adjust it${isPhone()?'':' (on iPad you can also do this in any tool except Scale)'}. Drag empty space to pan; pinch to zoom.</span>`;
+  } else if(mode==='erase'){
+    h = `<span class="hint">Tap an item to remove it. Tapping a plane asks before deleting.</span>`;
+  }
+  s.innerHTML=h;
+  s.querySelectorAll('[data-lt]').forEach(b=>b.onclick=()=>{curLine=b.dataset.lt; renderSub();});
+  s.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{curPitch=+b.dataset.p; renderSub();});
+  s.querySelectorAll('[data-pen]').forEach(b=>b.onclick=()=>{curPen=b.dataset.pen; renderSub();});
+  const o=$('sOtherP'); if(o) o.onclick=async()=>{
+    const r=await modal('<h3>Pitch</h3><label>Rise per 12" of run</label><input data-f="p" inputmode="decimal" placeholder="e.g. 16">',[{t:'Cancel'},{t:'Use',cls:'primary',v:1}]);
+    const p=parseFloat(r.vals&&r.vals.p); if(r.v && p>=0 && p<=30){ curPitch=p; renderSub(); } };
+  if($('sClose')) $('sClose').onclick=closeDraft;
+  if($('sUndoPt')) $('sUndoPt').onclick=()=>{ draft.pop(); cleanupPts(); render(); };
+  if($('sCancel')) $('sCancel').onclick=()=>{ draft=[]; cleanupPts(); render(); };
+}
+
+// ---------- view ----------
+function fitView(){
+  const r=$('edwrap').getBoundingClientRect();
+  if(!job.source){ view={s:1,tx:0,ty:0}; return; }
+  const s=Math.min(r.width/job.source.w, r.height/job.source.h)*0.96;
+  view={s, tx:(r.width-job.source.w*s)/2, ty:(r.height-job.source.h*s)/2};
+}
+// Never let the roof image slide completely off the screen: keep at least 25% of the screen covered by it (or the whole image if it's small).
+function clampView(v){
+  if(!job || !job.source) return v;
+  const r=$('edwrap').getBoundingClientRect(); const W=r.width, H=r.height;
+  const iw=job.source.w*v.s, ih=job.source.h*v.s;
+  const kx=Math.min(iw, W*0.25), ky=Math.min(ih, H*0.25);
+  v.tx=Math.min(W-kx, Math.max(kx-iw, v.tx));
+  v.ty=Math.min(H-ky, Math.max(ky-ih, v.ty));
+  return v;
+}
+const toScr = p=>({x:p.x*view.s+view.tx, y:p.y*view.s+view.ty});
+const toWorld = p=>({x:(p.x-view.tx)/view.s, y:(p.y-view.ty)/view.s});
+
+// ---------- render editor ----------
+function pitchFill(p){ if(p==null) return 'rgba(240,62,62,.30)'; const h=200-Math.min(p,14)*12; return `hsla(${h},85%,55%,.28)`; }
+function render(){
+  if(!job) return;
+  $('empty').hidden = !!job.source;
+  renderSub();
+  const svg=$('cv'); const M=measure(job); const P=M.P; let h='';
+  h+=`<defs><filter id="halo"><feMorphology operator="dilate" radius="1"/></filter></defs>`;
+  if(job.source){
+    const tr=`matrix(${view.s},0,0,${view.s},${view.tx},${view.ty})`;
+    if(job.source.kind==='photo') h+=`<image href="${job.source.dataUrl}" x="0" y="0" width="${job.source.w}" height="${job.source.h}" transform="${tr}" preserveAspectRatio="none"/>`;
+    else { h+=`<g transform="${tr}">`+job.source.tiles.map(t=>`<image href="${t.url}" x="${t.ix}" y="${t.iy}" width="256.6" height="256.6"/>`).join('')+`</g>`; }
+  }
+  // planes
+  for(const pl of M.planes){
+    const pts=pl.poly.map(toScr).map(p=>`${p.x},${p.y}`).join(' ');
+    h+=`<polygon points="${pts}" fill="${pitchFill(pl.pitch)}" stroke="none"/>`;
+  }
+  // edges
+  for(const e of M.edges){
+    const a=toScr(P[e.a]), b=toScr(P[e.b]); const col=e.type?LT[e.type].c:UNTAGGED;
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/>`;
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="3" stroke-linecap="round" ${e.type?'':'stroke-dasharray="7 5"'}/>`;
+    if(e.vent) h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#fff" stroke-width="3" stroke-dasharray="3 6"/>`;
+  }
+  // labels
+  if(showLabels && M.k){
+    for(const e of M.edges){
+      const a=toScr(P[e.a]), b=toScr(P[e.b]); if(len(sub(a,b))<46) continue;
+      const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+      h+=`<text x="${m.x}" y="${m.y}" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${fmtFtIn(e.trueLen)}</text>`;
+    }
+  }
+  if(showLabels){
+    for(const pl of M.planes){
+      const c=toScr(pl.centroid);
+      const t1 = pl.pitch==null? 'no pitch' : pl.pitch+'/12';
+      const t2 = M.k? fmt0(pl.area)+' sf' : '';
+      h+=`<text x="${c.x}" y="${c.y-7}" font-size="13" font-weight="700" text-anchor="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${designator(pl.idx)} · ${t1}</text>`;
+      if(t2) h+=`<text x="${c.x}" y="${c.y+9}" font-size="12" text-anchor="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${t2}</text>`;
+    }
+  }
+  // corners
+  const shared=new Map(); job.planes.forEach(pl=>pl.pts.forEach(id=>shared.set(id,(shared.get(id)||0)+1)));
+  for(const p of job.pts){ const s=toScr(p); const r = mode==='move'?7.5:5.5;
+    h+=`<circle cx="${s.x}" cy="${s.y}" r="${r}" fill="#fff" stroke="#000" stroke-width="1.5"/>`; }
+  // crosshair while dragging a corner
+  if(dragPt){ const d=toScr(dragPt);
+    h+=`<line x1="0" y1="${d.y}" x2="100%" y2="${d.y}" stroke="#ffd43b" stroke-width="1"/><line x1="${d.x}" y1="0" x2="${d.x}" y2="100%" stroke="#ffd43b" stroke-width="1"/>
+        <circle cx="${d.x}" cy="${d.y}" r="11" fill="none" stroke="#ffd43b" stroke-width="2"/>`; }
+  // draft
+  if(draft.length){
+    const pts=draft.map(id=>toScr(P[id]));
+    h+=`<polyline points="${pts.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${'#e8762b'}" stroke-width="3"/>`;
+    pts.forEach((p,i)=>h+=`<circle cx="${p.x}" cy="${p.y}" r="${i===0?9:6}" fill="${i===0?'#e8762b':'#fff'}" stroke="#e8762b" stroke-width="2.5"/>`);
+  }
+  // scale line
+  const sl = scalePick.length? {a:scalePick[0], b:scalePick[1]} : null;   // taped line is shown on the report, not while drawing
+  if(sl && sl.a){
+    const a=toScr(sl.a); h+=`<circle cx="${a.x}" cy="${a.y}" r="6" fill="#ffd43b" stroke="#000"/>`;
+    if(sl.b){ const b=toScr(sl.b);
+      h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#ffd43b" stroke-width="3" stroke-dasharray="4 3"/><circle cx="${b.x}" cy="${b.y}" r="6" fill="#ffd43b" stroke="#000"/>`;
+      if(job.scaleLine&&!scalePick.length) h+=`<text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-10}" font-size="12" text-anchor="middle" fill="#ffd43b" stroke="#000" stroke-width="3" paint-order="stroke">taped ${fmtFtIn(job.scaleLine.ft)}</text>`;
+    }
+  }
+  // penetrations
+  for(const p of job.pens){ const s=toScr(p); const t=PT[p.type]||PEN_TYPES[0];
+    h += t.sq ? `<rect x="${s.x-10}" y="${s.y-10}" width="20" height="20" rx="2" fill="${t.c}" stroke="#000" stroke-width="1.5"/>`
+              : `<circle cx="${s.x}" cy="${s.y}" r="10.5" fill="${t.c}" stroke="#000" stroke-width="1.5"/>`;
+    h += `<text x="${s.x}" y="${s.y+1}"  font-size="${t.s.length>2?7.5:(t.s.length>1?9:11)}" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#000">${t.s}</text>`;
+    if(isSized(p.type) && showLabels) h += `<text x="${s.x}" y="${s.y+22}" font-size="11" font-weight="600" text-anchor="middle" fill="${p.w?'#fff':'#ffb4a8'}" stroke="#000" stroke-width="3" paint-order="stroke">${p.w? fmtIn(p.w)+' × '+fmtIn(p.l) : 'no size'}</text>`;
+  }
+  svg.innerHTML=h;
+  // HUD
+  let hud='';
+  if(job.source){
+    hud = M.k && M.planes.length ? `<b>${fmt2(M.area/100)} sq</b> · ${M.planes.length} plane${M.planes.length>1?'s':''} · ${job.pens.length} item${job.pens.length===1?'':'s'}` : (M.k?'Scale set':'');
+    const w=[]; if(!M.k) w.push('scale not set'); if(M.noPitch) w.push(M.noPitch+' no pitch'); if(M.untagged) w.push(M.untagged+' untagged');
+    if(w.length) hud += (hud?'<br>':'')+`<span class="w">⚠ ${w.join(' · ')}</span>`;
+  }
+  if(job.source && job.source.kind==='satellite') hud += (hud?'<br>':'')+'<span style="opacity:.7;font-size:11px">Imagery: Esri, Maxar, Earthstar Geographics</span>';
+  $('hud').innerHTML=hud; $('hud').style.display=hud?'block':'none';
+}
+
+// ---------- hit tests ----------
+function nearestPt(w, radiusScr, list){
+  let best=null, bd=radiusScr/view.s;
+  for(const p of (list||job.pts)){ const d=len(sub(p,w)); if(d<bd){bd=d;best=p;} }
+  return best;
+}
+function nearestEdge(w, radiusScr){
+  const M=measure(job); let best=null, bd=radiusScr/view.s;
+  for(const e of M.edges){ const r=segDist(w,M.P[e.a],M.P[e.b]); if(r.d<bd){bd=r.d;best={e,q:r.q,t:r.t};} }
+  return best;
+}
+function planeAt(w){
+  const M=measure(job); let best=null;
+  for(const pl of M.planes){ if(inPoly(w,pl.poly) && (!best || pl.planAreaPx<best.planAreaPx)) best=pl; }
+  return best;
+}
+function cleanupPts(){
+  const used=new Set(draft); job.planes.forEach(pl=>pl.pts.forEach(id=>used.add(id)));
+  job.pts=job.pts.filter(p=>used.has(p.id));
+  const keys=new Set(); job.planes.forEach(pl=>pl.pts.forEach((id,i)=>keys.add(ekey(id,pl.pts[(i+1)%pl.pts.length]))));
+  for(const k of Object.keys(job.edgeTypes)) if(!keys.has(k)) delete job.edgeTypes[k];
+  job.ridgeVent=job.ridgeVent||{}; for(const k of Object.keys(job.ridgeVent)) if(!keys.has(k)) delete job.ridgeVent[k];
+}
+
+// ---------- actions ----------
+function closeDraft(){
+  if(draft.length<3){ toast('A plane needs at least 3 corners'); return; }
+  pushHist();
+  job.planes.push({id:uid(), pts:[...draft], pitch:null});
+  draft=[]; save(); render();
+  toast('Plane added. Draw the next plane, or tag lines.');
+}
+function tap(scr){
+  if(!job.source) return;
+  const w=toWorld(scr);
+  if(mode==='draw'){
+    const draftPts = draft.map(id=>job.pts.find(p=>p.id===id));
+    if(draft.length>=3 && len(sub(draftPts[0],w))<20/view.s){ closeDraft(); return; }
+    if(!draft.length) pushHist();
+    let p = nearestPt(w,20);
+    if(p){ if(draft[draft.length-1]===p.id) return; if(draft.includes(p.id)){ toast('Corner already in this plane'); return; } draft.push(p.id); render(); return; }
+    const ed = nearestEdge(w,14);
+    if(ed && ed.t>0.02 && ed.t<0.98){
+      p={id:uid(), x:ed.q.x, y:ed.q.y}; job.pts.push(p);
+      splitEdge(ed.e.a, ed.e.b, p.id);
+      draft.push(p.id); save(); render(); return;
+    }
+    p={id:uid(), x:w.x, y:w.y}; job.pts.push(p); draft.push(p.id); render(); return;
+  }
+  if(mode==='lines'){
+    const ed=nearestEdge(w,22); if(!ed){ toast('Tap right on a line'); return; }
+    const key=ed.e.key; job.ridgeVent=job.ridgeVent||{};
+    if(curLine==='ridgevent'){
+      const t=job.edgeTypes[key];
+      if(t && t!=='ridge' && t!=='hip'){ toast('Ridge vent goes on a ridge or hip line'); return; }
+      pushHist();
+      if(!t) job.edgeTypes[key]='ridge';
+      if(job.ridgeVent[key]) delete job.ridgeVent[key]; else job.ridgeVent[key]=true;
+      save(); render(); return;
+    }
+    pushHist();
+    if(curLine==='none' || job.edgeTypes[key]===curLine){ delete job.edgeTypes[key]; delete job.ridgeVent[key]; }
+    else { job.edgeTypes[key]=curLine; if(curLine!=='ridge'&&curLine!=='hip') delete job.ridgeVent[key]; }
+    save(); render(); return;
+  }
+  if(mode==='pitch'){
+    const pl=planeAt(w); if(!pl){ toast('Tap inside a plane'); return; }
+    pushHist(); job.planes.find(x=>x.id===pl.id).pitch=curPitch; save(); render(); return;
+  }
+  if(mode==='items'){
+    const near = nearestPt(w,18,job.pens.filter(p=>isSized(p.type)));
+    if(near){ askSize(near); return; }
+    pushHist(); const it={id:uid(), x:w.x, y:w.y, type:curPen}; job.pens.push(it); save(); render();
+    if(isSized(curPen)) askSize(it, true);
+    return;
+  }
+  if(mode==='erase'){
+    const pen = nearestPt(w,18,job.pens);
+    if(pen){ pushHist(); job.pens=job.pens.filter(p=>p!==pen); save(); render(); return; }
+    const pl=planeAt(w);
+    if(pl){ confirmDeletePlane(pl); return; }
+    toast('Nothing there to remove'); return;
+  }
+  if(mode==='scale'){
+    const p = nearestPt(w,20); const pt = p? {x:p.x,y:p.y} : w;
+    scalePick.push(pt); render();
+    if(scalePick.length===2) askScale();
+    return;
+  }
+}
+async function confirmDeletePlane(pl){
+  const info = [pl.pitch==null?'no pitch':pl.pitch+'/12', job.ftPerPx? fmt0(pl.area)+' sf' : ''].filter(Boolean).join(' · ');
+  const r=await modal(`<h3>Delete plane ${designator(pl.idx)}?</h3><p>${esc(info)}</p><p class="mute">Its lines and their tags go with it. You can undo this.</p>`,
+    [{t:'Keep it'},{t:'Delete plane',cls:'primary',v:1}]);
+  if(!r.v) return;
+  pushHist(); job.planes=job.planes.filter(x=>x.id!==pl.id); cleanupPts(); save(); render();
+}
+function splitEdge(a,b,m){
+  for(const pl of job.planes){
+    const n=pl.pts.length;
+    for(let i=0;i<n;i++){ const x=pl.pts[i], y=pl.pts[(i+1)%n];
+      if((x===a&&y===b)||(x===b&&y===a)){ pl.pts.splice(i+1,0,m); break; } }
+  }
+  const t=job.edgeTypes[ekey(a,b)];
+  if(t){ delete job.edgeTypes[ekey(a,b)]; job.edgeTypes[ekey(a,m)]=t; job.edgeTypes[ekey(m,b)]=t; }
+  const rv=job.ridgeVent||{}; if(rv[ekey(a,b)]){ delete rv[ekey(a,b)]; rv[ekey(a,m)]=true; rv[ekey(m,b)]=true; }
+}
+async function askSize(it, isNew){
+  const t=PT[it.type];
+  const r=await modal(`<h3>${esc(t.n)} size</h3><p class="mute">Outside size as taped. Plain numbers are inches; use ' for feet (3' 2").</p>
+    <div class="row"><div><label>Width</label><input data-f="w" value="${it.w?esc(it.w):''}" placeholder='30'></div>
+    <div><label>Length (up the slope)</label><input data-f="l" value="${it.l?esc(it.l):''}" placeholder='46'></div></div>`,
+    [{t:isNew?'Skip for now':'Cancel'},{t:'Save size',cls:'primary',v:1,check:v=>(parseIn(v.w)>0&&parseIn(v.l)>0)?true:(toast('Enter both sizes, like 30 and 46'),false)}]);
+  if(!r.v) return;
+  if(!isNew) pushHist();
+  it.w=Math.round(parseIn(r.vals.w)*100)/100; it.l=Math.round(parseIn(r.vals.l)*100)/100; save(); render();
+}
+async function askScale(){
+  const [a,b]=scalePick; const px=len(sub(a,b));
+  if(px<5){ toast('Those points are too close together'); scalePick=[]; render(); return; }
+  const sat = job.source.kind==='satellite';
+  const r=await modal(`<h3>Taped length</h3><p class="mute">Measure along the roof edge as drawn from above (plan length) — an eave or ridge works best.${sat?' This replaces the satellite scale.':''}</p>
+    <label>Length (e.g. 42' 6" or 42.5)</label><input data-f="L" placeholder="42' 6&quot;">`,
+    [{t:'Cancel'},{t:'Set scale',cls:'primary',v:1,check:v=>parseLen(v.L)>0?true:(toast('Enter a length like 42\' 6"'),false)}]);
+  if(r.v){ pushHist(); const ft=parseLen(r.vals.L); job.ftPerPx=ft/px; job.scaleLine={a,b,ft}; save();
+    toast('Scale set: '+fmtFtIn(ft)); if(!job.planes.length) setMode('draw'); }
+  scalePick=[]; render();
+}
+
+// ---------- pointer / gestures ----------
+(function gestures(){
+  const el=$('cv'); const ptrs=new Map(); let g=null;
+  const pos = e => { const r=el.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  el.addEventListener('pointerdown',e=>{
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    ptrs.set(e.pointerId,pos(e));
+    if(ptrs.size===1){
+      const s=pos(e);
+      let drag=null;
+      if(canDragCorners() && job && job.source){ const p=nearestPt(toWorld(s), mode==='move'?28:20); if(p){ drag=p; pushHist(); } }
+      g={kind:'one', start:s, view:{...view}, moved:false, drag, pinched:false};
+    } else if(ptrs.size===2 && g){
+      const [p1,p2]=[...ptrs.values()];
+      g={kind:'pinch', d0:len(sub(p1,p2)), m0:{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2}, view:{...view}, pinched:true};
+    }
+  });
+  el.addEventListener('pointermove',e=>{
+    if(!ptrs.has(e.pointerId)||!g) return; ptrs.set(e.pointerId,pos(e));
+    if(g.kind==='pinch' && ptrs.size>=2){
+      const [p1,p2]=[...ptrs.values()]; const d=len(sub(p1,p2)); const m={x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2};
+      const s=Math.max(0.02,Math.min(40,g.view.s*d/(g.d0||1)));
+      const w0={x:(g.m0.x-g.view.tx)/g.view.s, y:(g.m0.y-g.view.ty)/g.view.s};
+      view=clampView({s, tx:m.x-w0.x*s, ty:m.y-w0.y*s}); render(); return;
+    }
+    if(g.kind==='one'){
+      const c=pos(e); const dx=c.x-g.start.x, dy=c.y-g.start.y;
+      if(!g.moved && Math.hypot(dx,dy)>7) g.moved=true;
+      if(!g.moved) return;
+      if(g.drag){ const w=toWorld(c); g.drag.x=w.x; g.drag.y=w.y; dragPt=g.drag; render(); }
+      else { view=clampView({s:g.view.s, tx:g.view.tx+dx, ty:g.view.ty+dy}); render(); }
+    }
+  });
+  const end=e=>{
+    if(!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
+    if(!g) return;
+    if(g.kind==='one' && ptrs.size===0){
+      if(g.drag){ if(g.moved){ save(); } else hist.pop(); dragPt=null; if(g.moved) render(); }
+      if(!g.moved && e.type==='pointerup') tap(g.start);
+      g=null;
+    } else if(ptrs.size===0) g=null;
+    else if(g.kind==='pinch' && ptrs.size===1){ g={kind:'one',start:{...[...ptrs.values()][0]},view:{...view},moved:true,drag:null}; }
+  };
+  el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
+  el.addEventListener('wheel',e=>{
+    e.preventDefault(); const f=Math.exp(-e.deltaY*0.0015); const s=Math.max(0.02,Math.min(40,view.s*f));
+    const c=pos(e); const w=toWorld(c); view=clampView({s, tx:c.x-w.x*s, ty:c.y-w.y*s}); render();
+  },{passive:false});
+  let lastW=0; window.addEventListener('resize',()=>{ if(!(job && $('sEdit').classList.contains('on'))) return;
+    const w=$('edwrap').clientWidth; if(Math.abs(w-lastW)>80){ lastW=w; fitView(); } render(); });
+})();
+
+// ---------- report ----------
+function diagramSVG(M){
+  const pts=[...Object.values(M.P)]; if(!pts.length) return '';
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  const W=1000, H=Math.max(380, Math.min(900, W*(y1-y0)/((x1-x0)||1)+0)), pad=60;
+  const sc=Math.min((W-2*pad)/((x1-x0)||1),(H-2*pad-30)/((y1-y0)||1));
+  const T=p=>({x:pad+(p.x-x0)*sc+((W-2*pad)-(x1-x0)*sc)/2, y:pad+(p.y-y0)*sc});
+  let h=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">`;
+  for(const pl of M.planes){ h+=`<polygon points="${pl.poly.map(T).map(p=>p.x+','+p.y).join(' ')}" fill="#f1f3f5" stroke="none"/>`; }
+  for(const e of M.edges){ const a=T(M.P[e.a]), b=T(M.P[e.b]);
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${e.type?LT[e.type].c:'#999'}" stroke-width="3" ${e.type?'':'stroke-dasharray="6 4"'} stroke-linecap="round"/>`;
+    if(e.vent) h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#fff" stroke-width="3" stroke-dasharray="3 6"/>`; }
+  for(const e of M.edges){ const a=T(M.P[e.a]), b=T(M.P[e.b]); if(len(sub(a,b))<34) continue;
+    let ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180;
+    const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    h+=`<text x="${m.x}" y="${m.y}" font-size="13" text-anchor="middle" dominant-baseline="middle" transform="rotate(${ang} ${m.x} ${m.y})" fill="#111" stroke="#fff" stroke-width="4" paint-order="stroke">${fmtFtIn(e.trueLen)}</text>`; }
+  for(const pl of M.planes){ const c=T(pl.centroid);
+    h+=`<text x="${c.x}" y="${c.y-4}" font-size="15" font-weight="700" text-anchor="middle" fill="#14213d">${designator(pl.idx)} ${pl.pitch==null?'':pl.pitch+'/12'}</text>
+        <text x="${c.x}" y="${c.y+13}" font-size="12" text-anchor="middle" fill="#444">${fmt0(pl.area)} sf</text>`; }
+  if(job.scaleLine){ const a=T(job.scaleLine.a), b=T(job.scaleLine.b);
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#e8762b" stroke-width="2" stroke-dasharray="5 4"/>
+        <circle cx="${a.x}" cy="${a.y}" r="4" fill="#e8762b"/><circle cx="${b.x}" cy="${b.y}" r="4" fill="#e8762b"/>
+        <text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-12}" font-size="12" text-anchor="middle" fill="#e8762b" stroke="#fff" stroke-width="4" paint-order="stroke">taped ${fmtFtIn(job.scaleLine.ft)} (scale)</text>`; }
+  // scale bar
+  const ft = [5,10,20,25,50].find(f=>f/M.k*sc>90) || 50; const bl=ft/M.k*sc;
+  h+=`<g transform="translate(${pad},${H-24})"><rect width="${bl}" height="6" fill="#14213d"/><text x="${bl+8}" y="7" font-size="13">${ft} ft</text></g>`;
+  h+=`<g transform="translate(${W-40},40)"><path d="M0,-22 L8,6 L0,0 L-8,6 Z" fill="#14213d"/><text y="22" font-size="13" text-anchor="middle">N</text></g>`;
+  return h+'</svg>';
+}
+function renderReport(){
+  const M=measure(job); const T=M.byType;
+  $('rTitle').innerHTML = 'Report<small>'+esc(job.name)+'</small>';
+  const waste=+job.waste||0;
+  let h='';
+  h += M.warnings.length ? `<div class="warnbox"><b>Check before exporting:</b><ul style="margin:6px 0 0 18px;padding:0">${M.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`
+                         : `<div class="okbox">Every plane has a pitch and every line is tagged.</div>`;
+  h += `<div class="card"><h2>${esc(job.name)}</h2><div class="mute">${esc([job.address,job.city,job.state,job.zip].filter(Boolean).join(', '))}</div>
+    <div class="kpis" style="margin-top:10px">
+      <div class="kpi"><div class="l">Roof area</div><div class="big">${fmt0(M.area)}</div><div class="l">sq ft</div></div>
+      <div class="kpi"><div class="l">Squares</div><div class="big">${fmt2(M.area/100)}</div><div class="l">before waste</div></div>
+      <div class="kpi"><div class="l">With ${waste}% waste</div><div class="big">${fmt2(M.area*(1+waste/100)/100)}</div><div class="l">squares</div></div>
+      <div class="kpi"><div class="l">Planes · predominant</div><div class="big">${M.planes.length}</div><div class="l">${M.predominant!=null?M.predominant+'/12':'—'}</div></div>
+    </div></div>`;
+  h += `<div class="card"><h2>Waste factors</h2><table><tr><th>Waste</th><th class="n">Sq ft</th><th class="n">Squares</th></tr>
+    ${[0,5,10,15,20].map(w=>`<tr${w===waste?' style="background:#fff4e6"':''}><td>${w?w+'%':'None (measured)'}${w===waste?' <span class="mute">· used in AccuLynx file</span>':''}</td><td class="n">${fmt0(M.area*(1+w/100))}</td><td class="n">${fmt2(M.area*(1+w/100)/100)}</td></tr>`).join('')}
+    </table></div>`;
+  h += `<div class="card"><h2>Lines</h2><table><tr><th>Type</th><th class="n">Count</th><th class="n">Length</th></tr>
+    ${LINE_TYPES.map(t=>`<tr><td><span class="sw" style="background:${t.c}"></span> ${t.n}</td><td class="n">${T[t.k].count}</td><td class="n">${fmt0(T[t.k].len)} LF</td></tr>`).join('')}
+    <tr><td><b>Hips + ridges</b></td><td class="n"></td><td class="n"><b>${fmt0(T.hip.len+T.ridge.len)} LF</b></td></tr>
+    <tr><td><b>Eaves + rakes</b></td><td class="n"></td><td class="n"><b>${fmt0(T.eave.len+T.rake.len)} LF</b></td></tr>
+    <tr><td>Ridge vent</td><td class="n">${M.ridgeVent.count}</td><td class="n">${fmt0(M.ridgeVent.len)} LF</td></tr>
+    ${M.untagged?`<tr><td style="color:var(--warn)">Untagged</td><td class="n" style="color:var(--warn)">${M.untagged}</td><td class="n"></td></tr>`:''}
+    </table></div>`;
+  const pitchRows = Object.entries(M.byPitch).sort((a,b)=>(a[0]==='none')-(b[0]==='none')||+a[0]-+b[0]);
+  h += `<div class="card"><h2>Area by pitch</h2><table><tr><th>Pitch</th><th class="n">Sq ft</th><th class="n">Squares</th></tr>
+    ${pitchRows.map(([p,a])=>`<tr><td>${p==='none'?'<span style="color:var(--warn)">No pitch set (counted flat)</span>':p+'/12'}</td><td class="n">${fmt1(a)}</td><td class="n">${fmt2(a/100)}</td></tr>`).join('')}
+    </table></div>`;
+  const penTotal = job.pens.filter(p=>(PT[p.type]||{pen:true}).pen).length;
+  h += `<div class="card"><h2>Items</h2><table>${PEN_TYPES.filter(t=>M.pens[t.k]).map(t=>`<tr><td><span class="sw" style="background:${t.c}"></span> ${t.n}</td><td class="n">${M.pens[t.k]}</td></tr>`).join('') || '<tr><td class="mute">No items placed</td><td></td></tr>'}
+    <tr><td><b>Penetrations</b> <span class="mute">(sent to AccuLynx)</span></td><td class="n"><b>${penTotal}</b></td></tr></table>
+    <p class="note">Satellite dishes and Kwik plugs are listed here but not counted as penetrations.</p></div>`;
+  const sizedList = job.pens.filter(p=>isSized(p.type));
+  if(sizedList.length){
+    const cnt={}; 
+    h += `<div class="card"><h2>Skylights &amp; chimneys</h2><table><tr><th>Item</th><th>Size (W × L)</th><th class="n">Area</th><th class="n">Perimeter</th></tr>
+      ${sizedList.map(p=>{ cnt[p.type]=(cnt[p.type]||0)+1; const nm=PT[p.type].n+' '+cnt[p.type];
+        return p.w&&p.l ? `<tr><td>${esc(nm)}</td><td>${fmtIn(p.w)} × ${fmtIn(p.l)}</td><td class="n">${fmt1(p.w*p.l/144)} sf</td><td class="n">${fmt1(2*(p.w+p.l)/12)} LF</td></tr>`
+                        : `<tr><td>${esc(nm)}</td><td style="color:var(--warn)">no size</td><td></td><td></td></tr>`; }).join('')}
+      <tr><td colspan="2"><b>Total</b></td><td class="n"><b>${fmt1(M.penArea)} sf</b></td><td class="n"><b>${fmt1(M.penPerim)} LF</b></td></tr></table>
+      <p class="note">Sent to AccuLynx as penetration area and perimeter. Roof area less penetrations: ${fmt0(M.area-M.penArea)} sf.</p></div>`;
+  }
+  h += `<div class="card"><h2>Planes</h2><table><tr><th>Plane</th><th>Pitch</th><th class="n">Footprint sf</th><th class="n">Roof sf</th></tr>
+    ${M.planes.map(pl=>`<tr><td>${designator(pl.idx)}</td><td>${pl.pitch==null?'—':pl.pitch+'/12'}${pl.u||pl.pitch==null?'':' <span style="color:var(--warn)">(no eave/ridge)</span>'}</td><td class="n">${fmt1(pl.planArea)}</td><td class="n">${fmt1(pl.area)}</td></tr>`).join('')}
+    </table></div>`;
+  if(M.k && M.planes.length) h += `<div class="card"><h2>Drawing</h2><div id="drawing">${diagramSVG(M)}</div>
+    <div class="row" style="margin-top:8px">${LINE_TYPES.map(t=>`<span class="mute" style="flex:0 0 auto"><span class="sw" style="background:${t.c}"></span> ${t.n}</span>`).join('')}</div></div>`;
+  h += `<div class="card"><h2>Send to AccuLynx</h2>
+    <p class="mute">Saves the measurements in the same file layout as an EagleView XML. In AccuLynx: open the lead → Measurements → <b>Upload XML</b> → New Estimate → pick your template → pick this measurement.</p>
+    ${IN_PREVIEW?`<p class="note">In this preview the file saves as <b>.txt</b>. Rename it so it ends in <b>.xml</b> before uploading (Files app: long-press → Rename). Once MyRoof runs from its own site it saves as .xml directly.</p>`:''}
+    <div class="row"><button class="primary" id="bXML" ${M.k&&M.planes.length?'':'disabled'}>Save measurement file</button>
+    <button id="bJSON">Save job file (backup)</button></div></div>`;
+  $('report').innerHTML=h;
+  const base=(job.name||'job').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')||'job';
+  const bx=$('bXML'); if(bx) bx.onclick=async()=>{
+    if(M.warnings.length){ const r=await modal('<h3>Export anyway?</h3><p>'+M.warnings.map(esc).join('<br>')+'</p>',[{t:'Go back'},{t:'Export',cls:'primary',v:1}]); if(!r.v) return; }
+    saveFile(`MyRoof-${base}${IN_PREVIEW?'.xml.txt':'.xml'}`, buildXML(job), 'application/xml');
+  };
+  $('bJSON').onclick=()=>saveFile(`MyRoof-job-${base}.json`, JSON.stringify(job), 'application/json');
+}
+
+// ---------- start ----------
+(async function(){ await store.init(); renderJobs(); })();
+window.MyRoof = {measure, buildXML, newJob, elevations}; // for testing
+// offline support + home-screen install (only on the real site, not in previews)
+if(!IN_PREVIEW && 'serviceWorker' in navigator && location.protocol==='https:'){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+// ask the browser to keep saved jobs even when storage gets tight
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+</script>
+</body>
+</html>
