@@ -53,6 +53,12 @@ main.scroll{flex:1;overflow:auto;padding:14px;max-width:980px;width:100%;margin:
 #hud{position:absolute;left:8px;top:8px;background:rgba(20,33,61,.88);color:#fff;border-radius:10px;
   padding:6px 10px;font-size:13px;pointer-events:none;max-width:calc(100% - 16px)}
 #hud .w{color:#ffb4a8}
+#focusBar{position:absolute;left:8px;right:8px;top:8px;background:#fff4f2;border:1px solid #f3c2bb;color:var(--warn);
+  border-radius:10px;padding:8px 10px;font-size:13px;display:flex;gap:10px;align-items:flex-start;max-height:40%;overflow:auto}
+#focusBar[hidden]{display:none}
+#focusBar .fbtext{flex:1;min-width:0}
+#focusBar .fbhint{color:var(--mute);font-size:12px;margin-top:2px}
+#focusBar button{flex:0 0 auto;min-height:36px;padding:6px 11px}
 #toast{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;background:#111;color:#fff;padding:8px 14px;
   border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
 #toast.on{opacity:.92}
@@ -124,6 +130,7 @@ h2{font-size:17px;margin:0 0 8px}
   <div id="edwrap">
     <svg id="cv" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="hud"></div>
+    <div id="focusBar" hidden></div>
     <div id="empty" hidden>
       <div class="card">
         <h2>Load the roof image</h2>
@@ -569,6 +576,7 @@ let showLabels=true;
 let hist=[];
 let satFail=0, satTotal=0;
 let dragPt=null;          // corner being dragged (for the crosshair)
+let focus=false;          // label check: only the sections still missing labels are shown
 // Phones: corners only move in the Move tool, so swiping around doesn't nudge them. iPad/desktop: drag corners in any tool.
 const isPhone = () => Math.min(window.innerWidth, window.innerHeight) < 600;
 const canDragCorners = () => mode==='move' || (mode!=='scale' && !isPhone());
@@ -627,7 +635,7 @@ $('fileImport').onchange=async e=>{
 };
 
 function openJob(j){
-  job=j; hist=[]; draft=[]; scalePick=[];
+  job=j; hist=[]; draft=[]; scalePick=[]; focus=false;
   mode = job.planes.length? 'lines':'draw';
   if(!job.ftPerPx && job.source) mode='scale';
   $('edTitle').innerHTML = esc(job.name)+`<small>${esc(job.address||'')}</small>`;
@@ -635,9 +643,14 @@ function openJob(j){
 }
 $('btnBack').onclick=()=>{ store.put(job); show('sJobs'); renderJobs(); };
 $('btnUndo').onclick=undo;
-$('btnFit').onclick=()=>{ fitView(); render(); };
+$('btnFit').onclick=()=>{ const vis=focusVis(measure(job)); if(vis) fitTo(measure(job).planes.filter(pl=>vis.has(pl.id))); else fitView(); render(); };
 $('btnLabels').onclick=()=>{ showLabels=!showLabels; render(); };
-$('btnReport').onclick=()=>{ store.put(job); renderReport(); show('sReport'); };
+$('btnReport').onclick=()=>{
+  store.put(job);
+  const bad=unlabeledPlanes(measure(job));
+  if(bad.length){ startLabelCheck(bad); return; }   // locked until every section is labeled
+  renderReport(); show('sReport');
+};
 $('btnRBack').onclick=()=>{ show('sEdit'); render(); };
 $('btnInfo').onclick=async()=>{
   const r=await modal('<h3>Job info</h3>'+jobForm(job)+`
@@ -697,6 +710,7 @@ function setupModes(){
 function setMode(m){
   if(mode==='draw' && m!=='draw' && draft.length){ draft=[]; cleanupPts(); }
   if(m!=='scale') scalePick=[];
+  if(focus && m!=='lines' && m!=='pitch') endLabelCheck();   // the label check only covers tagging lines and setting pitch
   mode=m; render();
 }
 function renderSub(){
@@ -764,6 +778,12 @@ function render(){
   $('empty').hidden = !!job.source;
   renderSub();
   const svg=$('cv'); const M=measure(job); const P=M.P; let h='';
+  // label check: hide completed sections; end the check once nothing is missing
+  let vis=focusVis(M);
+  if(focus && !vis){ endLabelCheck(); toast('Every section is labeled — tap Report'); }
+  const shownPlanes = vis? M.planes.filter(pl=>vis.has(pl.id)) : M.planes;
+  const shownEdges = vis? M.edges.filter(e=>e.planes.some(pl=>vis.has(pl.id))) : M.edges;
+  const shownPtIds = vis? new Set(shownPlanes.flatMap(pl=>pl.ptIds)) : null;
   h+=`<defs><filter id="halo"><feMorphology operator="dilate" radius="1"/></filter></defs>`;
   if(job.source){
     const tr=`matrix(${view.s},0,0,${view.s},${view.tx},${view.ty})`;
@@ -771,37 +791,37 @@ function render(){
     else { h+=`<g transform="${tr}">`+job.source.tiles.map(t=>`<image href="${t.url}" x="${t.ix}" y="${t.iy}" width="256.6" height="256.6"/>`).join('')+`</g>`; }
   }
   // planes
-  for(const pl of M.planes){
+  for(const pl of shownPlanes){
     const pts=pl.poly.map(toScr).map(p=>`${p.x},${p.y}`).join(' ');
     h+=`<polygon points="${pts}" fill="${pitchFill(pl.pitch)}" stroke="none"/>`;
   }
-  // edges
-  for(const e of M.edges){
-    const a=toScr(P[e.a]), b=toScr(P[e.b]); const col=e.type?LT[e.type].c:UNTAGGED;
-    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/>`;
-    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="3" stroke-linecap="round" ${e.type?'':'stroke-dasharray="7 5"'}/>`;
+  // edges (during the label check, untagged lines are drawn thick and red so they're easy to find)
+  for(const e of shownEdges){
+    const a=toScr(P[e.a]), b=toScr(P[e.b]); const hot = vis && !e.type; const col=e.type?LT[e.type].c:(hot?'#ff3b30':UNTAGGED);
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity=".55" stroke-width="${hot?9:6}" stroke-linecap="round"/>`;
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="${hot?5:3}" stroke-linecap="round" ${e.type?'':'stroke-dasharray="7 5"'}/>`;
     if(e.vent) h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#fff" stroke-width="3" stroke-dasharray="3 6"/>`;
   }
   // labels
   if(showLabels && M.k){
-    for(const e of M.edges){
+    for(const e of shownEdges){
       const a=toScr(P[e.a]), b=toScr(P[e.b]); if(len(sub(a,b))<46) continue;
       const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
       h+=`<text x="${m.x}" y="${m.y}" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${fmtFtIn(e.trueLen)}</text>`;
     }
   }
-  if(showLabels){
-    for(const pl of M.planes){
+  if(showLabels || vis){
+    for(const pl of shownPlanes){
       const c=toScr(pl.centroid);
       const t1 = pl.pitch==null? 'no pitch' : pl.pitch+'/12';
-      const t2 = M.k? fmt0(pl.area)+' sf' : '';
-      h+=`<text x="${c.x}" y="${c.y-7}" font-size="13" font-weight="700" text-anchor="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${designator(pl.idx)} · ${t1}</text>`;
+      const t2 = vis? problemText(planeProblems(pl)) : (M.k? fmt0(pl.area)+' sf' : '');
+      h+=`<text x="${c.x}" y="${c.y-7}" font-size="13" font-weight="700" text-anchor="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${vis && pl.pitch==null ? designator(pl.idx) : designator(pl.idx)+' · '+t1}</text>`;
       if(t2) h+=`<text x="${c.x}" y="${c.y+9}" font-size="12" text-anchor="middle" fill="#fff" stroke="#000" stroke-width="3" paint-order="stroke">${t2}</text>`;
     }
   }
   // corners
   const shared=new Map(); job.planes.forEach(pl=>pl.pts.forEach(id=>shared.set(id,(shared.get(id)||0)+1)));
-  for(const p of job.pts){ const s=toScr(p); const r = mode==='move'?7.5:5.5;
+  for(const p of job.pts){ if(shownPtIds && !shownPtIds.has(p.id)) continue; const s=toScr(p); const r = mode==='move'?7.5:5.5;
     h+=`<circle cx="${s.x}" cy="${s.y}" r="${r}" fill="#fff" stroke="#000" stroke-width="1.5"/>`; }
   // crosshair while dragging a corner
   if(dragPt){ const d=toScr(dragPt);
@@ -823,7 +843,7 @@ function render(){
     }
   }
   // penetrations
-  for(const p of job.pens){ const s=toScr(p); const t=PT[p.type]||PEN_TYPES[0];
+  for(const p of (vis? [] : job.pens)){ const s=toScr(p); const t=PT[p.type]||PEN_TYPES[0];
     h += t.sq ? `<rect x="${s.x-10}" y="${s.y-10}" width="20" height="20" rx="2" fill="${t.c}" stroke="#000" stroke-width="1.5"/>`
               : `<circle cx="${s.x}" cy="${s.y}" r="10.5" fill="${t.c}" stroke="#000" stroke-width="1.5"/>`;
     h += `<text x="${s.x}" y="${s.y+1}"  font-size="${t.s.length>2?7.5:(t.s.length>1?9:11)}" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#000">${t.s}</text>`;
@@ -838,23 +858,59 @@ function render(){
     if(w.length) hud += (hud?'<br>':'')+`<span class="w">⚠ ${w.join(' · ')}</span>`;
   }
   if(job.source && job.source.kind==='satellite') hud += (hud?'<br>':'')+'<span style="opacity:.7;font-size:11px">Imagery: Esri, Maxar, Earthstar Geographics</span>';
+  if(vis) hud='';   // the label-check bar takes its place
   $('hud').innerHTML=hud; $('hud').style.display=hud?'block':'none';
+  // label-check bar
+  const fb=$('focusBar');
+  if(vis){
+    fb.innerHTML = `<div class="fbtext"><b>Label ${shownPlanes.length>1?'these sections':'this section'} before the report</b>`
+      + shownPlanes.map(pl=>`<div>${designator(pl.idx)}: ${esc(problemText(planeProblems(pl)))}</div>`).join('')
+      + `<div class="fbhint">Completed sections are hidden for now.</div></div><button id="fbAll">Show all</button>`;
+    fb.hidden=false;
+    $('fbAll').onclick=()=>{ endLabelCheck(); render(); toast('Report stays locked until every section is labeled'); };
+  } else { fb.hidden=true; fb.innerHTML=''; }
 }
+
+// ---------- label check (the report is locked until every section is labeled) ----------
+// A section (plane) is labeled when it has a pitch and every one of its lines is tagged.
+function planeProblems(pl){ return {untagged: pl.edgeKeys.filter(k=>!job.edgeTypes[k]).length, noPitch: pl.pitch==null}; }
+function unlabeledPlanes(M){ return M.planes.filter(pl=>{ const p=planeProblems(pl); return p.untagged || p.noPitch; }); }
+// Plane ids to show while the label check is on; null = show everything.
+function focusVis(M){ if(!focus) return null; const bad=unlabeledPlanes(M); return bad.length? new Set(bad.map(p=>p.id)) : null; }
+function problemText(p){ return [p.untagged? `${p.untagged} line${p.untagged>1?'s':''} not tagged` : '', p.noPitch? 'no pitch' : ''].filter(Boolean).join(' · '); }
+function fitTo(planes){
+  const pts=planes.flatMap(pl=>pl.poly); if(!pts.length){ fitView(); return; }
+  const r=$('edwrap').getBoundingClientRect(); const top=84;   // room for the label-check bar
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const p of pts){ x0=Math.min(x0,p.x); y0=Math.min(y0,p.y); x1=Math.max(x1,p.x); y1=Math.max(y1,p.y); }
+  const s=Math.max(0.02, Math.min(40, (r.width-60)/((x1-x0)||1), (r.height-top-40)/((y1-y0)||1)));
+  view=clampView({s, tx:r.width/2-(x0+x1)/2*s, ty:top+(r.height-top)/2-(y0+y1)/2*s});
+}
+function startLabelCheck(bad){
+  focus=true;
+  fitTo(bad);
+  setMode(bad.some(pl=>planeProblems(pl).untagged)? 'lines' : 'pitch');
+  toast(`${bad.length} section${bad.length>1?'s need':' needs'} labels before the report`);
+}
+function endLabelCheck(){ focus=false; fitView(); }
 
 // ---------- hit tests ----------
 function nearestPt(w, radiusScr, list){
+  if(!list && focus){ const vis=focusVis(measure(job)); if(vis){ const ids=new Set(job.planes.filter(pl=>vis.has(pl.id)).flatMap(pl=>pl.pts)); list=job.pts.filter(p=>ids.has(p.id)); } }
   let best=null, bd=radiusScr/view.s;
   for(const p of (list||job.pts)){ const d=len(sub(p,w)); if(d<bd){bd=d;best=p;} }
   return best;
 }
 function nearestEdge(w, radiusScr){
-  const M=measure(job); let best=null, bd=radiusScr/view.s;
-  for(const e of M.edges){ const r=segDist(w,M.P[e.a],M.P[e.b]); if(r.d<bd){bd=r.d;best={e,q:r.q,t:r.t};} }
+  const M=measure(job); const vis=focusVis(M); let best=null, bd=radiusScr/view.s;
+  for(const e of M.edges){ if(vis && !e.planes.some(p=>vis.has(p.id))) continue;
+    const r=segDist(w,M.P[e.a],M.P[e.b]); if(r.d<bd){bd=r.d;best={e,q:r.q,t:r.t};} }
   return best;
 }
 function planeAt(w){
-  const M=measure(job); let best=null;
-  for(const pl of M.planes){ if(inPoly(w,pl.poly) && (!best || pl.planAreaPx<best.planAreaPx)) best=pl; }
+  const M=measure(job); const vis=focusVis(M); let best=null;
+  for(const pl of M.planes){ if(vis && !vis.has(pl.id)) continue;
+    if(inPoly(w,pl.poly) && (!best || pl.planAreaPx<best.planAreaPx)) best=pl; }
   return best;
 }
 function cleanupPts(){
